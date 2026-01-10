@@ -4,22 +4,46 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/zic20/chirpy/internal/auth"
+	"github.com/zic20/chirpy/internal/database"
 )
 
-func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	type params struct {
-		Email string `json:"email"`
-	}
+type authParams struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
-	reqBodyJson := params{}
+type ResponseUser struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+
+	reqBody := authParams{}
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&reqBodyJson)
+	err := decoder.Decode(&reqBody)
 	if err != nil {
-		log.Printf("error parsing request body: %s\n", err)
-		respondWithError(w, 500, "server could not parse request body")
+		log.Printf("error parsing request body: %s\n", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "could not parse request body")
 		return
 	}
-	user, err := cfg.Db.CreateUser(r.Context(), reqBodyJson.Email)
+
+	hash, err := auth.HashPassword(reqBody.Password)
+	if err != nil {
+		log.Printf("error hashing user password: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "Error creating user acccount please try again later.")
+		return
+	}
+
+	user, err := cfg.Db.CreateUser(r.Context(), database.CreateUserParams{
+		Email: reqBody.Email, HashedPassword: hash,
+	})
 	if err != nil {
 		log.Printf("error creating user: %s", err.Error())
 		respondWithError(w, 400, "Something went wrong please try again later")
@@ -35,4 +59,37 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	respondWithJSON(w, 201, resBody)
 
+}
+
+func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
+	reqBody := authParams{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&reqBody)
+	if err != nil {
+		log.Printf("error parsing request body: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "server could not parse request body")
+		return
+	}
+
+	user, err := cfg.Db.GetUserByEmail(r.Context(), reqBody.Email)
+	if err != nil {
+		log.Printf("user not found: %s", err.Error())
+		respondWithError(w, http.StatusUnauthorized, "username or password incorrect")
+		return
+	}
+
+	match, err := auth.CheckPasswordHash(reqBody.Password, user.HashedPassword)
+	if err != nil {
+		log.Printf("could not verify password: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong please try again.")
+		return
+	}
+
+	if !match {
+		log.Print("incorrect password")
+		respondWithError(w, http.StatusUnauthorized, "username or password incorrect")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, ResponseUser{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email})
 }

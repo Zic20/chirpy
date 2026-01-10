@@ -85,3 +85,34 @@ func cleanBody(body string, blockedWords map[string]struct{}) string {
 
 	return strings.Join(words, " ")
 }
+
+func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
+	chirpid := r.PathValue("chirpID")
+	chirp, err := cfg.Db.GetChirp(r.Context(), uuid.MustParse(chirpid))
+	if err != nil {
+		log.Printf("could not fetch chirp from the database: %s", err.Error())
+		respondWithError(w, http.StatusNotFound, "Not found")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, ChirpResponse{
+		chirp.ID, chirp.CreatedAt, chirp.UpdatedAt, chirp.Body, chirp.UserID,
+	})
+}
+
+func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request) {
+	response := []ChirpResponse{}
+
+	chirps, err := cfg.Db.GetAllChirps(r.Context())
+	if err != nil {
+		log.Printf("Error fetching chirps: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "error fetching chirps")
+		return
+	}
+
+	for _, chirp := range chirps {
+		response = append(response, ChirpResponse{chirp.ID, chirp.CreatedAt, chirp.UpdatedAt, chirp.Body, chirp.UserID})
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
+}
