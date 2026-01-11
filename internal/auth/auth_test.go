@@ -22,13 +22,12 @@ func TestMakeJWT(t *testing.T) {
 		t.Errorf("could not parse uuid for test case: %s", err.Error())
 		return
 	}
-	token, err := MakeJWT(uid, signature, time.Duration(duration))
+	_, err = MakeJWT(uid, signature, time.Duration(duration))
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	t.Log(token)
 }
 
 func TestValidateJWT(t *testing.T) {
