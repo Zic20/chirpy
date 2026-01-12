@@ -23,6 +23,7 @@ type User struct {
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	secret := os.Getenv("TOKEN_SIGNATURE")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)
@@ -32,7 +33,8 @@ func main() {
 	dbQueries := database.New(db)
 
 	apiCfg := apiConfig{
-		Db: dbQueries,
+		Db:         dbQueries,
+		jwt_secret: secret,
 	}
 
 	mux := http.NewServeMux()

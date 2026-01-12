@@ -12,8 +12,9 @@ import (
 )
 
 type authParams struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 type ResponseUser struct {
@@ -21,6 +22,7 @@ type ResponseUser struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +92,23 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "username or password incorrect")
 		return
 	}
+	expires_in := time.Hour
+	if reqBody.ExpiresInSeconds > 0 && reqBody.ExpiresInSeconds < 3600 {
+		expires_in = time.Second * time.Duration(reqBody.ExpiresInSeconds)
+	}
 
-	respondWithJSON(w, http.StatusOK, ResponseUser{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email})
+	token, err := auth.MakeJWT(user.ID, cfg.jwt_secret, expires_in)
+
+	if err != nil {
+		log.Printf("Error forming jwt: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, ResponseUser{ID: user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+		Token:     token,
+	})
 }

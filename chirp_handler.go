@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zic20/chirpy/internal/auth"
 	"github.com/zic20/chirpy/internal/database"
 )
 
@@ -20,6 +21,16 @@ type ChirpResponse struct {
 }
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+	}
+	userid, err := auth.ValidateJWT(token, cfg.jwt_secret)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+	}
 	w.Header().Set("Content-Type", "application/json")
 	type params struct {
 		Body   string    `json:"body"`
@@ -35,7 +46,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 	decoder := json.NewDecoder(r.Body)
 	reqBody := params{}
 
-	err := decoder.Decode(&reqBody)
+	err = decoder.Decode(&reqBody)
 	if err != nil {
 		log.Printf("Error parsing request body: %s\n", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
@@ -57,7 +68,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.Db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   text,
-		UserID: reqBody.UserID,
+		UserID: userid,
 	})
 
 	if err != nil {
