@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -153,6 +154,7 @@ func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request) {
 	response := []ChirpResponse{}
 	author_id := r.URL.Query().Get("author_id")
+	sort_query := r.URL.Query().Get("sort")
 	var chirps []database.Chirp
 	var err error
 	if author_id != "" {
@@ -171,6 +173,10 @@ func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request)
 		log.Printf("Error fetching chirps: %s", err.Error())
 		respondWithError(w, http.StatusInternalServerError, "error fetching chirps")
 		return
+	}
+
+	if sort_query == "desc" {
+		sort.Slice(chirps, func(i, j int) bool { return chirps[i].CreatedAt.After(chirps[j].CreatedAt) })
 	}
 
 	for _, chirp := range chirps {
