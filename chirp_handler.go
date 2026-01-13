@@ -152,8 +152,21 @@ func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request) {
 	response := []ChirpResponse{}
+	author_id := r.URL.Query().Get("author_id")
+	var chirps []database.Chirp
+	var err error
+	if author_id != "" {
+		user_id, err := uuid.Parse(author_id)
+		if err != nil {
+			log.Printf("error parsing author_id: %v", err)
+			respondWithError(w, http.StatusInternalServerError, "author_id could not be parsed")
+			return
+		}
 
-	chirps, err := cfg.Db.GetAllChirps(r.Context())
+		chirps, err = cfg.Db.GetChirpsForUser(r.Context(), user_id)
+	} else {
+		chirps, err = cfg.Db.GetAllChirps(r.Context())
+	}
 	if err != nil {
 		log.Printf("Error fetching chirps: %s", err.Error())
 		respondWithError(w, http.StatusInternalServerError, "error fetching chirps")
