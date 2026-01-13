@@ -24,6 +24,15 @@ type ResponseUser struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
+}
+
+type User struct {
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -54,10 +63,11 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resBody := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	respondWithJSON(w, 201, resBody)
@@ -115,10 +125,11 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resBody := User{
-		ID:        updatedUser.ID,
-		CreatedAt: updatedUser.CreatedAt,
-		UpdatedAt: updatedUser.UpdatedAt,
-		Email:     updatedUser.Email,
+		ID:          updatedUser.ID,
+		CreatedAt:   updatedUser.CreatedAt,
+		UpdatedAt:   updatedUser.UpdatedAt,
+		Email:       updatedUser.Email,
+		IsChirpyRed: updatedUser.IsChirpyRed,
 	}
 
 	respondWithJSON(w, 200, resBody)
@@ -185,6 +196,7 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Email:        user.Email,
 		Token:        token,
 		RefreshToken: refresh_token.Token,
+		IsChirpyRed:  user.IsChirpyRed,
 	})
 }
 
@@ -248,3 +260,57 @@ func (cfg *apiConfig) handleRevokeRefreshToken(w http.ResponseWriter, r *http.Re
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (cfg *apiConfig) handleIsChirpyRedWebhook(w http.ResponseWriter, r *http.Request) {
+	type WebhookBody struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+
+	var reqBody WebhookBody
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&reqBody)
+	if err != nil {
+		log.Printf("Error processing polka webhook request: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if reqBody.Event != "user.upgraded" {
+		log.Printf("Event not processed: %s", reqBody.Event)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	userid, err := uuid.Parse(reqBody.Data.UserID)
+	if err != nil {
+		log.Printf("couldn't parse userid: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user, err := cfg.Db.GetUserById(r.Context(), userid)
+	if err != nil {
+		log.Printf("couldn't fetch user: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err = cfg.Db.UpgradeToIsChirpyRed(r.Context(), user.ID); err != nil {
+		log.Printf("couldn't update user: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+}
+
+// {
+//   "event": "user.upgraded",
+//   "data": {
+//     "user_id": "3311741c-680c-4546-99f3-fc9efac2036c"
+//   }
+// }
