@@ -25,11 +25,13 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Print(err.Error())
 		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
 	}
 	userid, err := auth.ValidateJWT(token, cfg.jwt_secret)
 	if err != nil {
 		log.Print(err.Error())
 		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	type params struct {
@@ -84,6 +86,43 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		UserID:    chirp.UserID,
 	}
 	respondWithJSON(w, 201, responsse)
+}
+
+func (cfg *apiConfig) handleDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	userid, err := auth.ValidateJWT(token, cfg.jwt_secret)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	chirpid := r.PathValue("chirpID")
+	chirpuuid, err := uuid.Parse(chirpid)
+	chirp, err := cfg.Db.GetChirp(r.Context(), chirpuuid)
+	if err != nil {
+		log.Printf("chirp not found: %s", err)
+		respondWithError(w, http.StatusNotFound, "chirp not found")
+		return
+	}
+
+	if chirp.UserID != userid {
+		log.Print("User not authorized to delete this chirp")
+		respondWithError(w, http.StatusForbidden, "user not authorized to perform this action")
+		return
+	}
+
+	if err = cfg.Db.DeleteChirp(r.Context(), chirp.ID); err != nil {
+		log.Printf("Error deleting chirp: %s", err.Error())
+		respondWithError(w, http.StatusInternalServerError, "couldn't delete chirp")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func cleanBody(body string, blockedWords map[string]struct{}) string {

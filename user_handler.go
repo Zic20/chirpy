@@ -64,6 +64,67 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	userid, err := auth.ValidateJWT(token, cfg.jwt_secret)
+	if err != nil {
+		log.Print(err.Error())
+		respondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	user, err := cfg.Db.GetUserById(r.Context(), userid)
+	if err != nil {
+		log.Printf("Error fetching user: %s", err)
+		respondWithError(w, http.StatusNotFound, "user does not exist")
+		return
+	}
+
+	reqBody := authParams{}
+	decoder := json.NewDecoder(r.Body)
+	if err = decoder.Decode(&reqBody); err != nil {
+		log.Printf("Error parsing request body: %s\n", err)
+		respondWithError(w, http.StatusInternalServerError, "Error parsing request body")
+		return
+	}
+
+	password_hash := user.HashedPassword
+	email := user.Email
+	if reqBody.Password != "" {
+		password_hash, err = auth.HashPassword(reqBody.Password)
+		if err != nil {
+			log.Printf("error hashing user password: %s", err.Error())
+			respondWithError(w, http.StatusInternalServerError, "Error updating user acccount please try again later.")
+			return
+		}
+	}
+
+	if reqBody.Email != "" {
+		email = reqBody.Email
+	}
+
+	updatedUser, err := cfg.Db.UpdateUser(r.Context(), database.UpdateUserParams{Email: email, HashedPassword: password_hash, ID: userid})
+	if err != nil {
+		log.Printf("error updating user's account: %s", err)
+		respondWithError(w, http.StatusOK, "couldn't update user's account")
+		return
+	}
+	resBody := User{
+		ID:        updatedUser.ID,
+		CreatedAt: updatedUser.CreatedAt,
+		UpdatedAt: updatedUser.UpdatedAt,
+		Email:     updatedUser.Email,
+	}
+
+	respondWithJSON(w, 200, resBody)
+
+}
+
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	reqBody := authParams{}
 	decoder := json.NewDecoder(r.Body)
