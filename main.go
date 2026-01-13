@@ -15,6 +15,7 @@ func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	secret := os.Getenv("TOKEN_SIGNATURE")
+	polka_key := os.Getenv("POLKA_KEY")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)
@@ -26,6 +27,7 @@ func main() {
 	apiCfg := apiConfig{
 		Db:         dbQueries,
 		jwt_secret: secret,
+		polka_key:  polka_key,
 	}
 
 	mux := http.NewServeMux()

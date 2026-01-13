@@ -93,3 +93,17 @@ func GetBearerToken(headers http.Header) (string, error) {
 	token := strings.Replace(authorization, "Bearer ", "", 1)
 	return token, nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+	authorization := headers.Get("Authorization")
+	if authorization == "" {
+		return "", errors.New("authorization header expected")
+	}
+
+	if !strings.HasPrefix(authorization, "ApiKey") {
+		return "", errors.New("invalid authorization header")
+	}
+
+	apiKey := strings.Replace(authorization, "ApiKey ", "", 1)
+	return apiKey, nil
+}

@@ -262,6 +262,18 @@ func (cfg *apiConfig) handleRevokeRefreshToken(w http.ResponseWriter, r *http.Re
 }
 
 func (cfg *apiConfig) handleIsChirpyRedWebhook(w http.ResponseWriter, r *http.Request) {
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		log.Printf("Error getting apikey: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if apiKey != cfg.polka_key {
+		log.Print("Api key didn't match")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	type WebhookBody struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -271,7 +283,7 @@ func (cfg *apiConfig) handleIsChirpyRedWebhook(w http.ResponseWriter, r *http.Re
 
 	var reqBody WebhookBody
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&reqBody)
+	err = decoder.Decode(&reqBody)
 	if err != nil {
 		log.Printf("Error processing polka webhook request: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
